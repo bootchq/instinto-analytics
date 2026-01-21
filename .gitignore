@@ -1,0 +1,21 @@
+# Секреты
+.env
+env
+*.json
+!railway.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+
+# Логи
+*.log
+*.txt
+
+# IDE
+.idea/
+.vscode/
+*.swp
