@@ -15,6 +15,151 @@ class WebGraphQLError(RuntimeError):
     pass
 
 
+def _get_default_ops() -> Dict[str, "OperationTemplate"]:
+    """Возвращает дефолтные GraphQL операции для RetailCRM."""
+    # Основной запрос списка чатов
+    chats_list_query = """query chatsList($first: Int, $last: Int, $before: Cursor, $after: Cursor, $sort: ChatSort!, $filter: ChatsFilter) {
+  chats(
+    first: $first
+    last: $last
+    before: $before
+    after: $after
+    sort: $sort
+    filter: $filter
+  ) {
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+      startCursor
+      endCursor
+    }
+    totalCount
+    edges {
+      cursor
+      node {
+        id
+        name
+        lastActivity
+        channel {
+          id
+          name
+          type
+        }
+        customer {
+          id
+          name
+          firstName
+          lastName
+          phone
+          email
+        }
+        lastDialog {
+          id
+          createdAt
+          assignedAt
+          closedAt
+          responsible {
+            ... on User {
+              id
+              name
+            }
+          }
+        }
+        lastMessage {
+          id
+          type
+          time
+          ... on TextMessage {
+            content
+            author {
+              ... on User {
+                id
+                name
+              }
+              ... on Customer {
+                id
+                name
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}"""
+
+    messages_query = """query messages($chatId: ID!, $first: Int, $last: Int, $before: Cursor, $after: Cursor) {
+  messages(chatId: $chatId, first: $first, last: $last, before: $before, after: $after) {
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+      startCursor
+      endCursor
+    }
+    edges {
+      cursor
+      node {
+        id
+        type
+        time
+        ... on TextMessage {
+          content
+          author {
+            ... on User {
+              id
+              name
+            }
+            ... on Customer {
+              id
+              name
+            }
+          }
+        }
+        ... on SystemMessage {
+          action
+        }
+      }
+    }
+  }
+}"""
+
+    # Запрос списка каналов
+    channels_list_query = """query ChannelsList {
+  channels {
+    edges {
+      node {
+        id
+        name
+        type
+        isActive
+      }
+    }
+  }
+}"""
+
+    return {
+        "chatsList": OperationTemplate(
+            operation_name="chatsList",
+            query=chats_list_query,
+            default_variables={
+                "sort": "BY_LAST_ACTIVITY",
+                "filter": {"channelIds": [], "tags": [], "userIds": [], "botIds": [], "tagsFilteringMode": "ALL"},
+                "first": 20
+            }
+        ),
+        "messages": OperationTemplate(
+            operation_name="messages",
+            query=messages_query,
+            default_variables={"first": 100}
+        ),
+        "ChannelsList": OperationTemplate(
+            operation_name="ChannelsList",
+            query=channels_list_query,
+            default_variables={}
+        )
+    }
+
+
 @dataclass(frozen=True)
 class OperationTemplate:
     operation_name: str
@@ -54,11 +199,30 @@ class WebGraphQLClient:
     Клиент для RetailCRM web GraphQL (mg-s*.retailcrm.pro/api/graphql/v1/batch).
     """
 
-    def __init__(self, *, curl_file: str, timeout_s: int = 180, max_retries: int = 5) -> None:
+    def __init__(self, *, curl_file: str = None, token: str = None, timeout_s: int = 180, max_retries: int = 5) -> None:
         self.curl_file = curl_file
         self.timeout_s = timeout_s
         self.max_retries = max_retries
-        self._base_req, self.ops = _load_ops_from_curl_file(curl_file)
+
+        if curl_file:
+            self._base_req, self.ops = _load_ops_from_curl_file(curl_file)
+        elif token:
+            # Создаём базовый запрос с токеном
+            self._base_req = CurlRequest(
+                method="POST",
+                url="https://mg-s1.retailcrm.pro/api/graphql/v1/batch",
+                headers={
+                    "content-type": "application/json",
+                    "x-client-token": token,
+                    "Origin": "https://instinto.retailcrm.ru",
+                    "Referer": "https://instinto.retailcrm.ru/",
+                },
+                data=None
+            )
+            # Загружаем операции из шаблона
+            self.ops = _get_default_ops()
+        else:
+            raise WebGraphQLError("Either curl_file or token must be provided")
 
     def has_op(self, operation_name: str) -> bool:
         return operation_name in self.ops

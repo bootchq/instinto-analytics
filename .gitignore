@@ -13,7 +13,7 @@ venv/
 
 # Логи
 *.log
-*.txt
+!requirements.txt
 
 # IDE
 .idea/

@@ -170,43 +170,56 @@ def check_warnings(rows: List[Dict[str, Any]]) -> List[str]:
 
 def main() -> None:
     base = Path(__file__).resolve().parent
-    env = _load_env(base / "env")
-    
+
+    # Пробуем загрузить из файла env, если он есть
+    env_file = base / "env"
+    env: Dict[str, str] = {}
+    if env_file.exists():
+        env = _load_env(env_file)
+
+    # Переменные окружения имеют приоритет над файлом
+    google_sheets_id = os.environ.get("GOOGLE_SHEETS_ID") or env.get("GOOGLE_SHEETS_ID")
+    google_sa_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON") or env.get("GOOGLE_SERVICE_ACCOUNT_JSON")
+
+    if not google_sheets_id or not google_sa_json:
+        print("❌ GOOGLE_SHEETS_ID или GOOGLE_SERVICE_ACCOUNT_JSON не настроены")
+        return
+
     # Генерируем ежедневный отчёт
     print("Генерирую ежедневный отчёт...")
     generate_daily_report()
-    
+
     # Читаем отчёт
     ss = open_spreadsheet(
-        spreadsheet_id=env["GOOGLE_SHEETS_ID"],
-        service_account_json_path=env["GOOGLE_SERVICE_ACCOUNT_JSON"],
+        spreadsheet_id=google_sheets_id,
+        service_account_json_path=google_sa_json,
     )
-    
+
     report_rows = _read_table(ss.worksheet("daily_report"))
-    
+
     # Берем последние записи (сегодня)
     if not report_rows:
         print("Нет данных для отчёта")
         return
-    
+
     # Фильтруем по сегодняшней дате
     from datetime import datetime
     today = datetime.now().strftime("%Y-%m-%d")
     today_rows = [r for r in report_rows if r.get("date") == today]
-    
+
     if not today_rows:
         # Берем последние записи
         today_rows = report_rows[-2:] if len(report_rows) >= 2 else report_rows
-    
+
     # Форматируем отчёт
     report_text = format_daily_report(today_rows)
-    
+
     # Проверяем предупреждения
     warnings = check_warnings(today_rows)
-    
-    # Отправляем в Telegram
-    telegram_token = env.get("TELEGRAM_BOT_TOKEN")
-    telegram_chat_id = env.get("TELEGRAM_CHAT_ID")
+
+    # Отправляем в Telegram (приоритет у переменных окружения)
+    telegram_token = os.environ.get("TELEGRAM_BOT_TOKEN") or env.get("TELEGRAM_BOT_TOKEN")
+    telegram_chat_id = os.environ.get("TELEGRAM_CHAT_ID") or env.get("TELEGRAM_CHAT_ID")
     
     if not telegram_token or not telegram_chat_id:
         print("⚠️ TELEGRAM_BOT_TOKEN или TELEGRAM_CHAT_ID не настроены")

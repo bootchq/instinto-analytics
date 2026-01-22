@@ -506,14 +506,32 @@ def main() -> None:
     skipped = 0
     batch_num = 0
 
-    # 2) чаты: web GraphQL (если WEB_CURL_FILE есть/заполнен)
+    # 2) чаты: web GraphQL (если WEB_CURL_FILE есть/заполнен или токен из Playwright)
     # Если файла нет — продолжим пытаться через public API (но у вас он 404).
     web_chats: List[Dict[str, Any]] = []
-    try:
-        if os.path.exists(os.path.join(os.path.dirname(__file__), web_curl_file)):
-            web_curl_file = os.path.join(os.path.dirname(__file__), web_curl_file)
-        if os.path.exists(web_curl_file):
-            wg = WebGraphQLClient(curl_file=web_curl_file)
+    wg = None
+
+    # Проверяем токен из переменной окружения (от Playwright)
+    client_token = os.environ.get("RETAILCRM_CLIENT_TOKEN")
+    if client_token:
+        print(f"🔐 Используем токен из RETAILCRM_CLIENT_TOKEN: {client_token[:20]}...")
+        try:
+            wg = WebGraphQLClient(token=client_token)
+        except Exception as e:
+            print(f"❌ Ошибка создания клиента с токеном: {e}")
+
+    # Если токена нет — пробуем curl файл
+    if wg is None:
+        try:
+            if os.path.exists(os.path.join(os.path.dirname(__file__), web_curl_file)):
+                web_curl_file = os.path.join(os.path.dirname(__file__), web_curl_file)
+            if os.path.exists(web_curl_file):
+                wg = WebGraphQLClient(curl_file=web_curl_file)
+        except Exception as e:
+            print(f"WEB curl file disabled / failed: {e}")
+
+    if wg is not None:
+        try:
             # Преобразуем YYYY-MM-DD в ISO для GraphQL
             start_iso = f"{start}T00:00:00Z"
             end_iso = f"{end}T23:59:59Z"
@@ -527,8 +545,8 @@ def main() -> None:
                 wanted_types = ["INSTAGRAM", "WHATSAPP"]
 
             web_chats = _iter_web_chats(wg, start_iso=start_iso, end_iso=end_iso, channel_types=wanted_types)
-    except Exception as e:
-        print(f"WEB chats disabled / failed: {e}")
+        except Exception as e:
+            print(f"WEB chats failed: {e}")
 
     if not web_chats:
         raise RuntimeError(

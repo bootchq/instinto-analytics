@@ -17,9 +17,35 @@ sys.path.insert(0, str(Path(__file__).parent))
 # Загружаем переменные окружения из Railway
 # Railway автоматически предоставляет все переменные через os.environ
 
+
+def get_auth_token():
+    """Получает токен авторизации через Playwright."""
+    login = os.environ.get("RETAILCRM_LOGIN")
+    password = os.environ.get("RETAILCRM_PASSWORD")
+
+    if not login or not password:
+        print("⚠️ RETAILCRM_LOGIN/PASSWORD не заданы, пропускаю автологин")
+        return None
+
+    print("🔐 Получаю токен авторизации через Playwright...")
+    try:
+        from auth_retailcrm import get_retailcrm_token
+        token = get_retailcrm_token(login, password, headless=True)
+        print(f"✅ Токен получен: {token[:20]}...")
+        # Сохраняем токен в переменную окружения для использования в скриптах
+        os.environ["RETAILCRM_CLIENT_TOKEN"] = token
+        return token
+    except Exception as e:
+        print(f"❌ Ошибка получения токена: {e}")
+        return None
+
+
 def main():
     """Главная функция запуска."""
-    
+
+    # Получаем токен авторизации
+    get_auth_token()
+
     # Проверяем, какой скрипт нужно запустить
     script = os.environ.get("RAILWAY_SCRIPT", "export_to_sheets")
     
