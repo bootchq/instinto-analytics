@@ -491,8 +491,11 @@ def main() -> None:
             pass
 
     # 1) пользователи берём из RetailCRM API (он работает)
+    print("🔄 Создаю RetailCRM клиента...")
     client = RetailCrmClient.from_env()
+    print("🔄 Получаю пользователей...")
     users = client.get_users()
+    print(f"✅ Получено пользователей: {len(users)}")
     
     # Кеш для заказов по client_id (чтобы не делать повторные запросы)
     orders_cache: Dict[str, List[Dict[str, Any]]] = {}
@@ -526,7 +529,9 @@ def main() -> None:
             if os.path.exists(os.path.join(os.path.dirname(__file__), web_curl_file)):
                 web_curl_file = os.path.join(os.path.dirname(__file__), web_curl_file)
             if os.path.exists(web_curl_file):
+                print(f"🔄 Создаю WebGraphQL клиента из {web_curl_file}...")
                 wg = WebGraphQLClient(curl_file=web_curl_file)
+                print(f"✅ WebGraphQL клиент создан, операции: {list(wg.ops.keys())}")
         except Exception as e:
             print(f"WEB curl file disabled / failed: {e}")
 
@@ -544,7 +549,9 @@ def main() -> None:
             if not wanted_types:
                 wanted_types = ["INSTAGRAM", "WHATSAPP"]
 
+            print(f"🔄 Получаю чаты через _iter_web_chats (каналы: {wanted_types})...")
             web_chats = _iter_web_chats(wg, start_iso=start_iso, end_iso=end_iso, channel_types=wanted_types)
+            print(f"✅ Получено чатов: {len(web_chats)}")
         except Exception as e:
             print(f"WEB chats failed: {e}")
 
